@@ -1,4 +1,4 @@
-# PDF to Audiobook Converter
+# PDF to Audiobook Converter ![](frm_Main/icon.png)
 
 Support development of this project: [ko-fi.com/michael2281](https://ko-fi.com/michael2281)
 
