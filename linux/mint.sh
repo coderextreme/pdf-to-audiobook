@@ -36,7 +36,7 @@ sudo ldconfig
 sudo apt install ffmpeg
 
 # FUSE setup
-sudo apt install fuse libfuse2   # if it's a Debian/Ubuntu-based distrobox
+sudo apt install fuse3 libfuse2   # if it's a Debian/Ubuntu-based distrobox
 
 # NSPR/NSS setup
 sudo apt install libnspr4 libnss3
