@@ -202,7 +202,7 @@ EOF
 
 optional_gui() {
   if [[ "$SKIP_GUI" == "1" ]]; then
-    yellow "Skipping Electron GUI (not supported on a 2014 Mac mini / macOS ≤ 12)."
+    yellow "Skipping Electron GUI (not supported on a 2014 Mac mini / macOS ≤ 12 Monterey)."
     return
   fi
   step "Attempting Electron GUI build (newer Macs only)"
@@ -233,7 +233,7 @@ Open a new Terminal window so PATH picks up ~/.local/bin, then:
 Voices include: af_heart af_bella af_nicole af_sarah af_sky af_jessica
                 am_adam am_michael bf_emma bf_isabella bm_george bm_lewis
 
-Notes for a 2014 Mac mini
+Notes for a 2014 Mac mini/Mac Air
   • Synthesis is CPU-only and will be slow on long books. Start with a short PDF.
   • 8 GB machines may struggle; close other apps.
   • The Windows/Linux Electron front end is not packaged for this Mac.
