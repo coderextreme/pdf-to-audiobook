@@ -11,7 +11,8 @@ Notes:
 Convert PDF documents into high-quality MP3 or WAV audiobooks using **Kokoro TTS** (recommended) or **Parler-TTS**.
 
 Linux Nodes:
-- Build scripts are in linux/.   star the scripts from the main folder, like
+- Build scripts are in linux/.
+- Start the scripts from the main folder, like
 - ```bash linux/mint.sh```
 - Currently requires ffmpeg to be installed on system
 - Front-end can be tested with ```npm run preview```
