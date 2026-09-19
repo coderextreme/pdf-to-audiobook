@@ -66,9 +66,9 @@ max_words_per_chunk = 350
 pause_between_chunks_sec = 0.6
 
 [tool.pdf-to-audiobook.external_tools]
-ffmpeg  = "ffmpeg"
-ffprobe = "ffprobe"
-ffplay = "ffplay"
+ffmpeg  = "ffmpeg/bin/ffmpeg"
+ffprobe = "ffmpeg/bin/ffprobe"
+ffplay = "ffmpeg/bin/ffplay"
 
 [dropdowns]
 voices = [
