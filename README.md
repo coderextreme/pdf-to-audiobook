@@ -1,4 +1,6 @@
-# PDF to Audiobook Converter ![](frm_Main/favicon.png)
+# PDF to Audiobook Converter
+Support development of this project: ko-fi.com/michael2281
+![pdf to audiobook](pdf-to-audiobook.png)
 
 Support development of this project: [ko-fi.com/michael2281](https://ko-fi.com/michael2281)
 
@@ -15,11 +17,15 @@ Notes from upstream:
 
 Convert PDF documents into high-quality MP3 or WAV audiobooks using **Kokoro TTS** (recommended) or **Parler-TTS**.
 
-## About
+Linux notes:
+- Build scripts are in linux/.
+- Start the scripts from the main folder, like
+- ```bash linux/mint.sh```
+- Currently requires ffmpeg to be installed on system
+- Front-end can be tested with ```npm run preview```
 
-This tool extracts text from PDFs, splits it into natural chunks, generates speech with modern open-source TTS models, adds natural pauses, and combines everything into a single audio file — useful for books, articles, lectures, and long-form reading.
-
-Repository: [https://github.com/ikicker/pdf-to-audiobook](https://github.com/ikicker/pdf-to-audiobook)
+**About**
+This tool extracts text from PDFs, splits it into natural chunks, generates speech with modern open-source TTS models, adds natural pauses, and combines everything into a single audio file — perfect for books, articles, lectures, and long-form reading.
 
 ## Features
 

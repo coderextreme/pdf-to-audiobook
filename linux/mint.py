@@ -83,7 +83,7 @@ def main():
     run(["sudo", "apt", "install", "ffmpeg"])
 
     # FUSE setup
-    run(["sudo", "apt", "install", "fuse", "libfuse2"])  # Debian/Ubuntu-based distrobox
+    run(["sudo", "apt", "install", "fuse3", "libfuse2"])  # Debian/Ubuntu-based distrobox
 
     # NSPR/NSS setup
     run(["sudo", "apt", "install", "libnspr4", "libnss3"])
