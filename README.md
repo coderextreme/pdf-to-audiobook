@@ -10,7 +10,7 @@ Notes:
 
 Convert PDF documents into high-quality MP3 or WAV audiobooks using **Kokoro TTS** (recommended) or **Parler-TTS**.
 
-Linux Nodes:
+Linux notes:
 - Build scripts are in linux/.
 - Start the scripts from the main folder, like
 - ```bash linux/mint.sh```
