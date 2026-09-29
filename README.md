@@ -11,9 +11,7 @@ This project is an Open Source Eleven Labs alternative made to help disabled or 
 Notes from upstream:
 
 - There is a macOS installer and uninstaller. The Electron UI does not run on older macOS (for example Monterey on a 2014 Intel Mac mini).
-- Setup is being simplified.
-- Linux packaging (AppImage) is in progress.
-- Windows EXE and an uninstaller are in progress.
+- Working on Epub, plain text and document support.
 
 Convert PDF documents into high-quality MP3 or WAV audiobooks using **Kokoro TTS** (recommended) or **Parler-TTS**.
 
