@@ -6,7 +6,7 @@ Support development of this project: [ko-fi.com/michael2281](https://ko-fi.com/m
 
 This project is an Open Source Eleven Labs alternative made to help disabled or older people with reading text. Anyone can use it, including for study.
 
-**The front end currently works on Windows and Linux. The back end can also be used directly from the terminal on Windows, macOS, and Linux.**
+**The front end currently works on Windows, Linux, and Newer Macs. The back end can also be used directly from the terminal on Windows, macOS, and Linux.**
 
 Notes from upstream:
 
