@@ -2,7 +2,7 @@
  * SingleFileTab.tsx
  * Mirrors Python's SingleFileConversionTable.
  *
- * Each row = one PDF → audio conversion.
+ * Each row = one PDF, EPUB, or text file → audio conversion.
  * Conversion is dispatched to the main process via IPC, which spawns Python.
  */
 
@@ -97,7 +97,7 @@ export default function SingleFileTab({ config, jobRuntime, onStatus, onJobsChan
       <table className="conversion-table">
         <thead>
           <tr>
-            <th style={{ width: '28%' }}>Input PDF</th>
+            <th style={{ width: '28%' }}>Input file</th>
             <th style={{ width: '13%' }}>Voice</th>
             <th style={{ width: '28%' }}>Output File</th>
             <th style={{ width: '16%' }}>Progress</th>
@@ -112,12 +112,12 @@ export default function SingleFileTab({ config, jobRuntime, onStatus, onJobsChan
 
             return (
               <tr key={row.id}>
-                {/* Input PDF */}
+                {/* Input PDF, EPUB, or text */}
                 <td>
                   <PathInput
                     mode="file-open-pdf"
                     value={row.inputFile}
-                    placeholder="Select PDF…"
+                    placeholder="Select PDF, EPUB, or text…"
                     onChange={v => updateRow(row.id, { inputFile: v })}
                   />
                 </td>

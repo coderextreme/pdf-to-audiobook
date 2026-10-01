@@ -1,15 +1,16 @@
 [project]
 name = "pdf-to-audiobook"
 version = "0.1.0"
-description = "Convert PDF documents to high-quality audiobooks using Kokoro TTS"
+description = "Convert PDF, EPUB, and plain text to high-quality audiobooks using Kokoro TTS"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Inner Ninja" }]
-keywords = ["tts", "audiobook", "pdf", "kokoro", "text-to-speech"]
+keywords = ["tts", "audiobook", "pdf", "epub", "kokoro", "text-to-speech"]
 
 dependencies = [
     "pypdf>=5.0",
+    "ebooklib>=0.18",          # EPUB text extraction
     "nltk>=3.8",
     "PyYAML>=6.0",              # still useful as fallback or for other YAML needs
     "tqdm>=4.66",

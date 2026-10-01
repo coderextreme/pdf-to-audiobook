@@ -2,7 +2,7 @@
  * BatchTab.tsx
  * Mirrors Python's BatchConversionTable.
  *
- * Each row converts an entire folder of PDFs → a target folder.
+ * Each row converts a folder of PDF, EPUB, or text files → a target folder of MP3s.
  */
 
 import { useState } from 'react'

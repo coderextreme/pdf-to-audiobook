@@ -118,7 +118,12 @@ app.whenReady().then(() => {
   ipcMain.handle('dialog:openFile', async (_e: IpcMainInvokeEvent, filter?: string) => {
     const filters =
       filter === 'pdf'
-        ?[{ name: 'PDF Files', extensions: ['pdf'] }]
+        ?[
+            { name: 'Books and text', extensions: ['pdf', 'epub', 'txt', 'text', 'md'] },
+            { name: 'PDF', extensions: ['pdf'] },
+            { name: 'EPUB', extensions: ['epub'] },
+            { name: 'Plain text', extensions: ['txt', 'text', 'md'] },
+          ]
         : [
             { name: 'Audio Files', extensions:['mp3', 'wav'] },
             { name: 'All Files',   extensions: ['*'] },
@@ -170,13 +175,16 @@ app.whenReady().then(() => {
     processQueue()
   })
 
-  // ── Conversion (batch — folder of PDFs) ───────────────────────────────────
+  // ── Conversion (batch — folder of PDF, EPUB, or text files) ──────────────
   ipcMain.handle('conversion:startBatch', async (_e, payload: BatchConversionStartPayload) => {
     const { jobId, inputFolder, outputFolder, voice } = payload
+    const inputExts = ['.pdf', '.epub', '.txt', '.text', '.md']
 
     let pdfFiles: string[]
     try {
-      pdfFiles = readdirSync(inputFolder).filter(f => f.toLowerCase().endsWith('.pdf'))
+      pdfFiles = readdirSync(inputFolder).filter(f =>
+        inputExts.some(ext => f.toLowerCase().endsWith(ext))
+      )
     } catch {
       mainWin.webContents.send('conversion:error', {
         jobId,
@@ -188,12 +196,12 @@ app.whenReady().then(() => {
     if (pdfFiles.length === 0) {
       mainWin.webContents.send('conversion:error', {
         jobId,
-        message: 'No PDF files found in the selected folder.',
+        message: 'No PDF, EPUB, or plain-text files found in the selected folder.',
       } satisfies ConversionErrorPayload)
       return
     }
 
-    // Add each file to the queue
+    // Add each file to the queue. Batch output stays MP3; single-file mode can save WAV or MP3.
     for (let i = 0; i < pdfFiles.length; i++) {
       const pdfName = pdfFiles[i]
       const inputFile  = join(inputFolder, pdfName)
