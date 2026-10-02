@@ -3,6 +3,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from ebooklib import epub
 from pypdf import PdfWriter
@@ -85,10 +86,32 @@ class ExtractFormatTests(unittest.TestCase):
             self.converter.pdf_path = str(path)
             self.assertIsInstance(self.converter._extract_text(), str)
 
+    def test_convert_alias_accepts_input_path(self):
+        with patch.object(self.converter, "pdf_to_audio", return_value="book.mp3") as pdf_to_audio:
+            result = self.converter.convert(
+                input_path="chapter.epub",
+                output_path="chapter.wav",
+                voice="am_adam",
+            )
+        self.assertEqual(result, "book.mp3")
+        pdf_to_audio.assert_called_once_with(
+            pdf_path="chapter.epub",
+            output_path="chapter.wav",
+            voice="am_adam",
+        )
+
+    def test_convert_accepts_pdf_path_keyword(self):
+        with patch.object(self.converter, "pdf_to_audio", return_value="book.mp3") as pdf_to_audio:
+            self.converter.convert(pdf_path="book.pdf", output_file="book.mp3")
+        pdf_to_audio.assert_called_once_with(
+            pdf_path="book.pdf",
+            output_path="book.mp3",
+            voice=None,
+        )
+
     def test_output_extension_guard(self):
         with self.assertRaises(ValueError):
             self.converter.output_path = "book.ogg"
-            # Call only the suffix check by simulating the save branch.
             suffix = Path(self.converter.output_path).suffix.lower()
             from PDF_to_Audiobook import SUPPORTED_OUTPUT_EXTENSIONS
             if suffix not in SUPPORTED_OUTPUT_EXTENSIONS:

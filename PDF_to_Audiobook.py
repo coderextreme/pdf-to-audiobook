@@ -156,6 +156,21 @@ class AudiobookConverter:
 
         print(f"\n✅ Success! Audiobook saved to: {out_path}")
         print(f"   Duration: {len(final_audio)/1000:.1f} seconds")
+        return str(out_path)
+
+    def convert(self, input_path: str = None, output_path: str = None, voice: str = None, pdf_path: str = None, **kwargs):
+        """
+        Public entry point used by the UI and external callers.
+
+        `pdf_to_audio` remains as an alias. Accepts either name for the source
+        file so older and newer call sites both work.
+        """
+        source = input_path or pdf_path or kwargs.get("input_file") or kwargs.get("file")
+        if not source:
+            raise TypeError("convert() requires input_path or pdf_path")
+        output = output_path or kwargs.get("output_file") or kwargs.get("out")
+        selected_voice = voice if voice is not None else kwargs.get("voice")
+        return self.pdf_to_audio(pdf_path=source, output_path=output, voice=selected_voice)
 
     # ==================== Internal Helper Methods ====================
 
@@ -383,7 +398,7 @@ if __name__ == "__main__":
 
     if args.pdf:
         # CLI mode
-        converter.pdf_to_audio(pdf_path=args.pdf, output_path=args.out, voice=args.voice)
+        converter.convert(input_path=args.pdf, output_path=args.out, voice=args.voice)
     else:
         # Interactive mode
         converter.pdf_to_audio(
