@@ -34,7 +34,7 @@
   },
   "build": {
     "appId": "com.innerninja.pdf-to-audiobook",
-    "productName": "PDF_to_Audiobook",
+    "productName": "PDFToAudiobook",
     "directories": {
       "output": "release"
     },
@@ -67,7 +67,7 @@
       "publisher": "CN=8A2CB2FC-2019-41E3-B5EB-6DDF69819614",
       "publisherDisplayName": "John Carlson",
       "applicationId": "PDFToAudiobook",
-      "displayName": "PDF_to_Audiobook",
+      "displayName": "PDFToAudiobook",
       "backgroundColor": "#1a1a1a",
       "languages": ["en-US"],
       "showNameOnTiles": false
