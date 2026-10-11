@@ -49,7 +49,7 @@
       "ffmpeg/**/*"
     ],
     "win": {
-      "target": "nsis",
+      "target": "appx",
       "icon": "frm_Main/favicon.ico"
     },
     "mac": {
@@ -61,6 +61,16 @@
       "icon": "frm_Main/favicon.png",
       "category": "Utility",
       "maintainer": "Inner Ninja <your-email@example.com>"
+    },
+    "appx": {
+      "identityName": "12345YourName.PDFtoAudiobook",
+      "publisher": "CN=1ffa2bbe-38f6-4f04-9625-a9b7e8dcd8d0",
+      "publisherDisplayName": "John Carlson",
+      "applicationId": "PDFtoAudiobook",
+      "displayName": "PDF to Audiobook",
+      "backgroundColor": "#1a1a1a",
+      "languages": ["en-US"],
+      "showNameOnTiles": false
     },
     "nsis": {
       "oneClick": false,
