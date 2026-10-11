@@ -39,7 +39,7 @@ sudo apt install ffmpeg
 sudo apt install fuse3 libfuse2   # if it's a Debian/Ubuntu-based distrobox
 
 # NSPR/NSS setup
-sudo apt install libnspr4 libnss3
+sudo apt install libnspr4 libnss3 libnss3-tools
 
 echo Removing virtual environment and recreating...
 sudo apt install python3.12-venv
