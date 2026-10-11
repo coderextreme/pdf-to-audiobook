@@ -34,7 +34,7 @@
   },
   "build": {
     "appId": "com.innerninja.pdf-to-audiobook",
-    "productName": "PDF to Audiobook",
+    "productName": "PDF_to_Audiobook",
     "directories": {
       "output": "release"
     },
@@ -63,11 +63,11 @@
       "maintainer": "Inner Ninja <your-email@example.com>"
     },
     "appx": {
-      "identityName": "12345YourName.PDFtoAudiobook",
-      "publisher": "CN=1ffa2bbe-38f6-4f04-9625-a9b7e8dcd8d0",
+      "identityName": "JohnCarlson.PDFToAudiobook",
+      "publisher": "CN=8A2CB2FC-2019-41E3-B5EB-6DDF69819614",
       "publisherDisplayName": "John Carlson",
-      "applicationId": "PDFtoAudiobook",
-      "displayName": "PDF to Audiobook",
+      "applicationId": "PDFToAudiobook",
+      "displayName": "PDF_to_Audiobook",
       "backgroundColor": "#1a1a1a",
       "languages": ["en-US"],
       "showNameOnTiles": false
