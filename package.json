@@ -57,7 +57,9 @@
       "icon": "resources/icon.icns"
     },
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "icon": "frm_Main/favicon.png",
       "category": "Utility",
       "maintainer": "Inner Ninja <your-email@example.com>"
@@ -69,7 +71,9 @@
       "applicationId": "PDFToAudiobook",
       "displayName": "PDFToAudiobook",
       "backgroundColor": "#1a1a1a",
-      "languages": ["en-US"],
+      "languages": [
+        "en-US"
+      ],
       "showNameOnTiles": false
     },
     "nsis": {
@@ -92,8 +96,8 @@
         "to": "PDF_to_Audiobook.py"
       },
       {
-        "from": "dist/PDF_to_Audiobook", 
-        "to": "PDF_to_Audiobook" 
+        "from": "dist/PDF_to_Audiobook",
+        "to": "PDF_to_Audiobook"
       },
       {
         "from": "pyproject.toml",
