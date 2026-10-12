@@ -1,7 +1,7 @@
 {
   "name": "pdf-to-audiobook",
   "desktopName": "com.ikicker.pdf-to-audiobook",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Convert PDF documents to high-quality audiobooks using Kokoro TTS",
   "main": "out/main/index.js",
   "author": "Inner Ninja",
@@ -42,8 +42,7 @@
     "files": [
       "out/**/*",
       "PDF_to_Audiobook.py",
-      "pyproject.toml",
-      "audiobook_env/**/*"
+      "pyproject.toml"
     ],
     "asarUnpack": [
       "ffmpeg/**/*"
@@ -84,13 +83,6 @@
       "shortcutName": "PDF to AudioBook"
     },
     "extraResources": [
-      {
-        "from": "audiobook_env",
-        "to": "audiobook_env",
-        "filter": [
-          "**/*"
-        ]
-      },
       {
         "from": "PDF_to_Audiobook.py",
         "to": "PDF_to_Audiobook.py"
