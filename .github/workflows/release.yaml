@@ -1,0 +1,153 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      draft:
+        description: 'Create draft release'
+        required: false
+        type: boolean
+        default: false
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Release (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux
+            os: ubuntu-22.04
+            script: package:linux
+            artifact_pattern: |
+              release/*.AppImage
+              release/*.deb
+              release/*.rpm
+          - target: win
+            os: windows-latest
+            script: package:win
+            artifact_pattern: |
+              release/*.exe
+              release/*.appx
+              release/*.msi
+              release/*.zip
+          - target: mac
+            os: macos-latest
+            script: package:mac
+            artifact_pattern: |
+              release/*.dmg
+              release/*.zip
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Install OS-specific system libraries
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libfuse2 libnss3 libnspr4 fontconfig dbus-x11 libasound2
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install ffmpeg
+
+      - name: Install system dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install ffmpeg --no-progress
+
+      # Ensure ffmpeg resource directory exists so electron-builder extraResources succeeds
+      - name: Ensure ffmpeg resource directory exists
+        shell: bash
+        run: |
+          mkdir -p ffmpeg/bin
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            cp "$(which ffmpeg)" ffmpeg/bin/ffmpeg 2>/dev/null || true
+            cp "$(which ffprobe)" ffmpeg/bin/ffprobe 2>/dev/null || true
+            cp "$(which ffplay)" ffmpeg/bin/ffplay 2>/dev/null || true
+          fi
+
+      # Set up Python virtual environment named audiobook_env matching package.json scripts
+      - name: Set up audiobook_env virtual environment (Linux / macOS)
+        if: runner.os != 'Windows'
+        run: |
+          python -m venv audiobook_env
+          source audiobook_env/bin/activate
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install .
+          python -m pip install pyinstaller
+          python -m spacy download en_core_web_sm || true
+          python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
+
+      - name: Set up audiobook_env virtual environment (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m venv audiobook_env
+          .\audiobook_env\Scripts\Activate.ps1
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install .
+          python -m pip install pyinstaller
+          python -m spacy download en_core_web_sm
+          python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
+
+      # Install Node dependencies
+      - name: Install Node dependencies
+        run: |
+          npm ci --ignore-scripts || npm install --ignore-scripts
+          node node_modules/electron/install.js
+
+      # Build PyInstaller executable and package Electron application
+      - name: Build & Package App
+        env:
+          NLTK_DISABLE_IMPORT_SECURITY: '1'
+        run: |
+          npm run ${{ matrix.script }}
+
+      # Upload artifacts to GitHub Actions run artifacts
+      - name: Upload workflow build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-to-audiobook-${{ matrix.target }}
+          path: release/
+          if-no-files-found: warn
+
+      # Publish binary assets to GitHub Release
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        with:
+          files: ${{ matrix.artifact_pattern }}
+          draft: ${{ github.event.inputs.draft == 'true' }}
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
