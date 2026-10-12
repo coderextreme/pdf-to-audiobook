@@ -48,7 +48,7 @@
       "ffmpeg/**/*"
     ],
     "win": {
-      "target": "appx",
+      "target": ["nsis", "appx"],
       "icon": "frm_Main/favicon.ico"
     },
     "mac": {
