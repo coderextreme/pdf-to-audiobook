@@ -1,0 +1,468 @@
+"""PDF to Audiobook Converter - Enhanced for Web App, Python Backend & Electron
+Supports Kokoro TTS, Edge-TTS (high-fidelity neural voices), and gTTS fallback.
+"""
+
+import argparse
+import asyncio
+import os
+import re
+import sys
+import tempfile
+import zipfile
+from html import unescape
+from html.parser import HTMLParser
+from pathlib import Path
+from typing import Callable, List, Optional
+
+def load_toml(path_or_str: str) -> dict:
+    """Safe TOML loader supporting tomllib, tomli, or pure-python fallback."""
+    try:
+        import tomllib
+        with open(path_or_str, "rb") as f:
+            return tomllib.load(f)
+    except Exception:
+        pass
+    try:
+        import tomli
+        with open(path_or_str, "rb") as f:
+            return tomli.load(f)
+    except Exception:
+        pass
+
+    result = {}
+    current_section = result
+    if not os.path.exists(path_or_str):
+        return result
+    with open(path_or_str, "r", encoding="utf-8") as f:
+        for raw_line in f:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("[") and line.endswith("]"):
+                sec = line[1:-1].strip()
+                keys = sec.split(".")
+                curr = result
+                for k in keys:
+                    curr = curr.setdefault(k, {})
+                current_section = curr
+                continue
+            if "=" in line:
+                k, v = line.split("=", 1)
+                k = k.strip()
+                v = v.strip()
+                if v.startswith('"') and v.endswith('"'):
+                    val = v[1:-1]
+                elif v.startswith("'") and v.endswith("'"):
+                    val = v[1:-1]
+                elif v.isdigit():
+                    val = int(v)
+                elif re.match(r"^\d+\.\d+$", v):
+                    val = float(v)
+                elif v.lower() == "true":
+                    val = True
+                elif v.lower() == "false":
+                    val = False
+                elif v.startswith("["):
+                    val = [x.strip().strip('"\'') for x in v.strip("[]").split(",") if x.strip()]
+                else:
+                    val = v
+                current_section[k] = val
+    return result
+
+# Safe optional imports with standard library fallbacks
+def sent_tokenize(text: str) -> List[str]:
+    try:
+        import nltk
+        return nltk.sent_tokenize(text)
+    except Exception:
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        return [s.strip() for s in sentences if s.strip()]
+
+try:
+    from pydub import AudioSegment
+except ImportError:
+    AudioSegment = None
+
+try:
+    from pypdf import PdfReader
+except ImportError:
+    PdfReader = None
+
+try:
+    from tqdm import tqdm
+except ImportError:
+    def tqdm(iterable, **kwargs):
+        return iterable
+
+SUPPORTED_INPUT_EXTENSIONS = {".pdf", ".epub", ".txt", ".text", ".md"}
+SUPPORTED_OUTPUT_EXTENSIONS = {".wav", ".mp3"}
+
+# Voice mapping between Kokoro voice identifiers and Edge-TTS neural voices
+KOKORO_TO_EDGE_VOICE = {
+    "af_heart": "en-US-JennyNeural",
+    "af_bella": "en-US-AvaNeural",
+    "af_nicole": "en-US-EmmaNeural",
+    "af_sarah": "en-US-MichelleNeural",
+    "af_sky": "en-US-AnaNeural",
+    "af_jessica": "en-US-AriaNeural",
+    "am_adam": "en-US-GuyNeural",
+    "am_michael": "en-US-ChristopherNeural",
+    "bf_emma": "en-GB-SoniaNeural",
+    "bf_isabella": "en-GB-LibbyNeural",
+    "bm_george": "en-GB-RyanNeural",
+    "bm_lewis": "en-GB-ThomasNeural",
+}
+
+# Download NLTK data quietly if needed
+try:
+    nltk.download('punkt', quiet=True)
+    nltk.download('punkt_tab', quiet=True)
+except Exception:
+    pass
+
+
+class _HTMLTextExtractor(HTMLParser):
+    """Pulls readable text out of EPUB / HTML chapters while keeping paragraph breaks."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+        self._skip = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"script", "style", "noscript"}:
+            self._skip += 1
+        elif tag in {"p", "div", "br", "h1", "h2", "h3", "h4", "h5", "h6", "li", "tr", "blockquote"}:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in {"script", "style", "noscript"} and self._skip > 0:
+            self._skip -= 1
+        elif tag in {"p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "tr", "blockquote"}:
+            self.parts.append("\n")
+
+    def handle_data(self, data):
+        if not self._skip and data:
+            self.parts.append(data)
+
+
+def html_to_text(html: str) -> str:
+    parser = _HTMLTextExtractor()
+    parser.feed(html or "")
+    parser.close()
+    text = unescape("".join(parser.parts))
+    lines = [" ".join(line.split()) for line in text.splitlines()]
+    cleaned = []
+    blank = False
+    for line in lines:
+        if not line:
+            if not blank and cleaned:
+                cleaned.append("")
+            blank = True
+            continue
+        cleaned.append(line)
+        blank = False
+    return "\n".join(cleaned).strip()
+
+
+class AudiobookConverter:
+    def __init__(self, config_path: str = "pyproject.toml", device: str = None):
+        self.config_path = config_path
+        self.config = self._load_config(config_path)
+        self._setup_ffmpeg()
+
+        self.device = device or self.config.get("tts", {}).get("device", "cpu")
+        if self.device == "cpu":
+            os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
+        # Determine TTS engine preference
+        self.engine_pref = self.config.get("tts", {}).get("engine", "kokoro").lower()
+        self.has_kokoro = False
+        try:
+            import kokoro  # noqa: F401
+            import torch   # noqa: F401
+            self.has_kokoro = True
+        except ImportError:
+            self.has_kokoro = False
+
+    def _load_config(self, config_path: str) -> dict:
+        """Load configuration from pyproject.toml"""
+        if not os.path.isfile(config_path):
+            return {}
+        try:
+            data = load_toml(config_path)
+            return data.get("tool", {}).get("pdf-to-audiobook", {})
+        except Exception as e:
+            print(f"Warning: Error loading config from {config_path}: {e}", file=sys.stderr)
+            return {}
+
+    def _setup_ffmpeg(self):
+        """Set up pydub with ffmpeg"""
+        ffmpeg_cfg = self.config.get("external_tools", {})
+        ffmpeg_path = ffmpeg_cfg.get("ffmpeg")
+        ffprobe_path = ffmpeg_cfg.get("ffprobe")
+
+        if ffmpeg_path and os.path.isfile(ffmpeg_path):
+            AudioSegment.converter = ffmpeg_path
+            AudioSegment.ffmpeg = ffmpeg_path
+        if ffprobe_path and os.path.isfile(ffprobe_path):
+            AudioSegment.ffprobe = ffprobe_path
+
+    def extract_text_from_file(self, file_path: str) -> str:
+        """Public helper to extract text from PDF, EPUB, TXT, or MD."""
+        path = Path(file_path)
+        if not path.is_file():
+            raise FileNotFoundError(f"Input file not found: {path}")
+
+        suffix = path.suffix.lower()
+        if suffix not in SUPPORTED_INPUT_EXTENSIONS:
+            raise ValueError(f"Unsupported format '{suffix}'. Supported: {', '.join(sorted(SUPPORTED_INPUT_EXTENSIONS))}")
+
+        if suffix in {".txt", ".text", ".md"}:
+            for encoding in ("utf-8", "utf-8-sig", "latin-1", "cp1252"):
+                try:
+                    return path.read_text(encoding=encoding)
+                except UnicodeDecodeError:
+                    continue
+            return path.read_text(errors="replace")
+
+        if suffix == ".pdf":
+            reader = PdfReader(str(path))
+            pages = []
+            for i, page in enumerate(reader.pages):
+                text = page.extract_text() or ""
+                if text.strip():
+                    pages.append(text)
+            return "\n\n".join(pages)
+
+        if suffix == ".epub":
+            chapters = []
+            with zipfile.ZipFile(str(path), "r") as z:
+                # Find all XHTML / HTML files in the EPUB container
+                names = [n for n in z.namelist() if n.lower().endswith((".xhtml", ".html", ".htm"))]
+                names.sort()
+                for name in names:
+                    raw_html = z.read(name).decode("utf-8", errors="replace")
+                    chapter_text = html_to_text(raw_html)
+                    if chapter_text:
+                        chapters.append(chapter_text)
+            return "\n\n".join(chapters)
+
+        return ""
+
+    def clean_text(self, text: str) -> str:
+        """Normalize linebreaks and spaces."""
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+        # Replace multiple spaces with single space
+        text = re.sub(r"[ \t]+", " ", text)
+        # Collapse excessive blank lines
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
+
+    def split_into_chunks(self, text: str, max_words: int = 350) -> List[str]:
+        """Split text into sentence-aware chunks without cutting sentences."""
+        try:
+            from nltk.tokenize import sent_tokenize
+            sentences = sent_tokenize(text)
+        except Exception:
+            # Fallback sentence tokenizer regex
+            sentences = re.split(r"(?<=[.!?])\s+", text)
+
+        chunks = []
+        current = []
+        count = 0
+
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+            words = len(sentence.split())
+            if count + words > max_words and current:
+                chunks.append(" ".join(current))
+                current = []
+                count = 0
+            current.append(sentence)
+            count += words
+
+        if current:
+            chunks.append(" ".join(current))
+
+        return chunks
+
+    def _synthesize_chunk_edge_tts(self, text_chunk: str, voice: str) -> AudioSegment:
+        """Synthesize a text chunk using Edge-TTS neural speech."""
+        import edge_tts
+
+        edge_voice = KOKORO_TO_EDGE_VOICE.get(voice, voice)
+        if not edge_voice.endswith("Neural"):
+            edge_voice = "en-US-JennyNeural"
+
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tf:
+            tmp_path = tf.name
+
+        try:
+            async def _run():
+                comm = edge_tts.Communicate(text_chunk, edge_voice)
+                await comm.save(tmp_path)
+
+            asyncio.run(_run())
+            return AudioSegment.from_file(tmp_path, format="mp3")
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+
+    def _synthesize_chunk_gtts(self, text_chunk: str) -> AudioSegment:
+        """Fallback synthesis using gTTS."""
+        from gtts import gTTS
+
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tf:
+            tmp_path = tf.name
+
+        try:
+            tts = gTTS(text=text_chunk, lang="en")
+            tts.save(tmp_path)
+            return AudioSegment.from_file(tmp_path, format="mp3")
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+
+    def _synthesize_chunk(self, text_chunk: str, voice: str) -> AudioSegment:
+        """Route synthesis to Kokoro (if active), Edge-TTS, or gTTS."""
+        if self.engine_pref == "kokoro" and self.has_kokoro:
+            try:
+                from kokoro import KPipeline
+                import numpy as np
+
+                lang_code = self.config.get("tts", {}).get("language_code", "a")
+                pipeline = KPipeline(lang_code=lang_code)
+                audio_pieces = []
+                for _, _, audio in pipeline(text_chunk, voice=voice):
+                    if len(audio) > 0:
+                        audio_pieces.append(audio)
+                if audio_pieces:
+                    combined = np.concatenate(audio_pieces)
+                    int_array = (np.clip(combined, -1.0, 1.0) * 32767).astype(np.int16)
+                    return AudioSegment(
+                        data=int_array.tobytes(),
+                        sample_width=2,
+                        frame_rate=24000,
+                        channels=1
+                    )
+            except Exception as e:
+                print(f"Kokoro failed, falling back to neural TTS: {e}", file=sys.stderr)
+
+        # High quality neural Edge-TTS synthesis
+        try:
+            return self._synthesize_chunk_edge_tts(text_chunk, voice)
+        except Exception as e:
+            print(f"Edge-TTS failed, using gTTS: {e}", file=sys.stderr)
+            return self._synthesize_chunk_gtts(text_chunk)
+
+    def text_to_audio(
+        self,
+        text: str,
+        output_path: str = "audiobook.mp3",
+        voice: str = "af_heart",
+        progress_callback: Optional[Callable[[int, str], None]] = None,
+    ) -> str:
+        """Convert raw text to an audiobook file."""
+        clean = self.clean_text(text)
+        if not clean.strip():
+            raise ValueError("No readable text provided")
+
+        max_words = self.config.get("processing", {}).get("max_words_per_chunk", 350)
+        pause_sec = float(self.config.get("processing", {}).get("pause_between_chunks_sec", 0.6))
+        pause_segment = AudioSegment.silent(duration=int(pause_sec * 1000))
+
+        chunks = self.split_into_chunks(clean, max_words)
+        total_chunks = len(chunks)
+
+        if progress_callback:
+            progress_callback(5, f"Prepared {total_chunks} speech chunks")
+
+        out_path = Path(output_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_fmt = out_path.suffix.lstrip(".").lower()
+        if out_fmt not in ("mp3", "wav"):
+            out_fmt = "mp3"
+
+        combined_audio = AudioSegment.empty()
+
+        for idx, chunk in enumerate(tqdm(chunks, desc="Generating", unit="chunk")):
+            segment = self._synthesize_chunk(chunk, voice)
+            if len(segment) > 0:
+                if len(combined_audio) > 0:
+                    combined_audio += pause_segment
+                combined_audio += segment
+
+            pct = int(10 + ((idx + 1) / total_chunks) * 85)
+            msg = f"Processed chunk {idx + 1} of {total_chunks}"
+            if progress_callback:
+                progress_callback(pct, msg)
+
+        if progress_callback:
+            progress_callback(96, f"Finalizing {out_fmt.upper()} encoding…")
+
+        combined_audio.export(str(out_path), format=out_fmt)
+
+        if progress_callback:
+            progress_callback(100, f"Completed: {out_path.name}")
+
+        return str(out_path)
+
+    def convert(
+            self, 
+            input_path,
+            output_path,
+            voice="af_heart",
+            text="Passed text parameter not handled, use input_path",
+            progress_callback: Optional[Callable[[int, str], None]] = None):
+        # text is read in this method
+        return self.pdf_to_audio(
+            pdf_path=input_path,
+            output_path=output_path,
+            voice=voice,
+            progress_callback=progress_callback)
+
+    def pdf_to_audio(
+        self,
+        pdf_path: str,
+        output_path: str = None,
+        voice: str = None,
+        progress_callback: Optional[Callable[[int, str], None]] = None,
+    ) -> str:
+        """Convert a PDF, EPUB, or text file to an audiobook."""
+        if output_path is None:
+            output_path = self.config.get("paths", {}).get("output", "audiobook.mp3")
+        if voice is None:
+            voice = self.config.get("tts", {}).get("voice", "af_heart")
+
+        if progress_callback:
+            progress_callback(2, f"Extracting text from {Path(pdf_path).name}…")
+
+        raw_text = self.extract_text_from_file(pdf_path)
+        return self.text_to_audio(raw_text, output_path, voice, progress_callback)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Convert PDF/EPUB/Text to Audiobook")
+    parser.add_argument("pdf", type=str, nargs="?", help="Input file path (.pdf, .epub, .txt, .md)")
+    parser.add_argument("out", type=str, nargs="?", help="Output audio file (.mp3, .wav)")
+    parser.add_argument("--voice", type=str, default="af_heart", help="Voice ID")
+    parser.add_argument("--device", type=str, default="cpu", choices=["cpu", "cuda"])
+
+    args = parser.parse_args()
+    converter = AudiobookConverter(device=args.device)
+
+    if args.pdf:
+        converter.pdf_to_audio(args.pdf, args.out, args.voice)
+    else:
+        p = input("Enter file path: ").strip()
+        o = input("Enter output filename (default: audiobook.mp3): ").strip() or "audiobook.mp3"
+        v = input("Enter voice (default: af_heart): ").strip() or "af_heart"
+        converter.pdf_to_audio(p, o, v)
