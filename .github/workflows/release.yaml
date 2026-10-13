@@ -113,7 +113,7 @@ jobs:
         run: |
           node --version
           npm --version
-          (python3 --version 2>/dev/null || python --version)
+          (python3.12 --version 2>/dev/null || python3.12 --version)
           git --version
           gh --version | sed -n 1p
 
@@ -170,19 +170,19 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
-            python -m venv audiobook_env
+            python3.12 -m venv audiobook_env
             source audiobook_env/Scripts/activate
           else
-            python3 -m venv audiobook_env
+            python3.12 -m venv audiobook_env
             source audiobook_env/bin/activate
           fi
-          python -m pip install --upgrade pip setuptools wheel
-          python -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install .
-          python -m pip install pyinstaller
-          python -m spacy download en_core_web_sm
+          python3.12 -m pip install --upgrade pip setuptools wheel
+          python3.12 -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+          python3.12 -m pip install .
+          python3.12 -m pip install pyinstaller
+          python3.12 -m spacy download en_core_web_sm
           # nltk.download() returns False instead of raising on failure
-          python -c "import nltk; assert nltk.download('punkt') and nltk.download('punkt_tab')"
+          python3.12 -c "import nltk; assert nltk.download('punkt') and nltk.download('punkt_tab')"
 
       - name: Install Node dependencies
         shell: bash
