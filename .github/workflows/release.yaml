@@ -83,14 +83,14 @@ jobs:
             os: ubuntu-24.04
             script: package:linux
             assets: release/*.AppImage release/*.deb release/*.rpm
-          - target: win
-            os: windows-latest
-            script: package:win
-            assets: release/*.exe release/*.appx release/*.appx
-          - target: mac
-            os: macos-latest
-            script: package:mac
-            assets: release/*.dmg release/*.zip
+         #- target: win
+         #  os: windows-latest
+         #  script: package:win
+         #  assets: release/*.exe release/*.appx release/*.appx
+         #- target: mac
+         #  os: macos-latest
+         #  script: package:mac
+         #  assets: release/*.dmg release/*.zip
 
     steps:
       # Replaces actions/checkout. The token is only used for the fetch and is
