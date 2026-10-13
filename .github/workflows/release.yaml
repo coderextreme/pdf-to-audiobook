@@ -41,7 +41,7 @@ jobs:
   # ---------------------------------------------------------------------------
   create-release:
     name: Create draft release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
@@ -113,7 +113,7 @@ jobs:
         run: |
           node --version
           npm --version
-          (python3 --version 2>/dev/null || python3 --version)
+          (python3.12 --version 2>/dev/null || python3.12 --version)
           git --version
           gh --version | sed -n 1p
 
@@ -173,16 +173,16 @@ jobs:
             py -3.12 -m venv audiobook_env
             source audiobook_env/Scripts/activate
           else
-            python3 -m venv audiobook_env
+            python3.12 -m venv audiobook_env
             source audiobook_env/bin/activate
           fi
-          python3 -m pip install --upgrade pip setuptools wheel
-          python3 -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
-          python3 -m pip install .
-          python3 -m pip install pyinstaller
-          python3 -m spacy download en_core_web_sm
+          python3.12 -m pip install --upgrade pip setuptools wheel
+          python3.12 -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+          python3.12 -m pip install .
+          python3.12 -m pip install pyinstaller
+          python3.12 -m spacy download en_core_web_sm
           # nltk.download() returns False instead of raising on failure
-          python3 -c "import nltk; assert nltk.download('punkt') and nltk.download('punkt_tab')"
+          python3.12 -c "import nltk; assert nltk.download('punkt') and nltk.download('punkt_tab')"
 
       - name: Install Node dependencies
         shell: bash
@@ -242,7 +242,7 @@ jobs:
     name: Publish release
     needs: build
     if: startsWith(github.ref, 'refs/tags/') && inputs.draft != true
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
     permissions:
       contents: write
