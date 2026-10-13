@@ -52,16 +52,7 @@
       "icon": "frm_Main/favicon.ico"
     },
     "mac": {
-      "target": [
-        {
-          "target": "dmg",
-          "arch": ["universal"]
-        },
-        {
-          "target": "zip",
-          "arch": ["universal"]
-        }
-      ],
+       "target": ["dmg", "zip"],
       "icon": "resources/icon.icns"
     },
     "linux": {
