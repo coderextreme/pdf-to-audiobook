@@ -113,7 +113,7 @@ jobs:
         run: |
           node --version
           npm --version
-          (python3.12 --version 2>/dev/null || python3.12 --version)
+          (python3 --version 2>/dev/null || python3 --version)
           git --version
           gh --version | sed -n 1p
 
@@ -124,6 +124,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y rpm libfuse2t64 libnss3 libnspr4 fontconfig dbus-x11 libasound2t64
+          sudo apt install -y xkb-data fontconfig dbus-x11
+          sudo apt install -y python3.12 python3.12-venv npm libnss3-tools libsmbclient0 ffmpeg fuse3 libfuse2
+
 
       # Replaces setup-ffmpeg and the system ffmpeg installs. The npm packages
       # carry statically linked binaries for the runner's own OS/arch. They are
@@ -176,13 +179,13 @@ jobs:
             python3.12 -m venv audiobook_env
             source audiobook_env/bin/activate
           fi
-          python3.12 -m pip install --upgrade pip setuptools wheel
-          python3.12 -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
-          python3.12 -m pip install .
-          python3.12 -m pip install pyinstaller
-          python3.12 -m spacy download en_core_web_sm
+          python3 -m pip install --upgrade pip setuptools wheel
+          python3 -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+          python3 -m pip install .
+          python3 -m pip install pyinstaller
+          python3 -m spacy download en_core_web_sm
           # nltk.download() returns False instead of raising on failure
-          python3.12 -c "import nltk; assert nltk.download('punkt') and nltk.download('punkt_tab')"
+          python3 -c "import nltk; assert nltk.download('punkt') and nltk.download('punkt_tab')"
 
       - name: Install Node dependencies
         shell: bash
