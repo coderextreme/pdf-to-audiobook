@@ -170,10 +170,10 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
-            python3 -3.12 -m venv audiobook_env
+            py -3.12 -m venv audiobook_env
             source audiobook_env/Scripts/activate
           else
-            python3 -3.12 -m venv audiobook_env
+            python3 -m venv audiobook_env
             source audiobook_env/bin/activate
           fi
           python3 -m pip install --upgrade pip setuptools wheel
