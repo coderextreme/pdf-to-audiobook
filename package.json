@@ -1,7 +1,7 @@
 {
   "name": "pdf-to-audiobook",
   "desktopName": "com.ikicker.pdf-to-audiobook",
-  "version": "3.0.25",
+  "version": "3.0.26",
   "description": "Convert PDF documents to high-quality audiobooks using Kokoro TTS",
   "main": "out/main/index.js",
   "author": "Inner Ninja",

@@ -237,9 +237,7 @@ jobs:
           ls -l ffmpeg/bin
           ./ffmpeg/bin/ffmpeg -version | sed -n 1p
           ./ffmpeg/bin/ffprobe -version | sed -n 1p
-          ./ffmpeg/bin/ffplay -version | sed -n 1p
           file ffmpeg/bin/ffmpeg || true
-          file ffmpeg/bin/ffplay || true
 
       # One bash script for all three OSes. GitHub's bash runs with -e -o
       # pipefail, so any failing command fails the step.
