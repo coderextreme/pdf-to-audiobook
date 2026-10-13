@@ -227,12 +227,12 @@ app.whenReady().then(() => {
     const cfg = loadConfig()
     if (cfg.ffplay) {
       try {
-        spawn(cfg.ffplay, ['-autoexit', '-i', filePath], { detached: true })
+        await shell.openPath(filePath);
       } catch {
-        await shell.openPath(filePath)
+        spawn(cfg.ffplay, ['-autoexit', '-i', filePath], { detached: true });
       }
     } else {
-      await shell.openPath(filePath)
+      await shell.openPath(filePath);
     }
   })
 
