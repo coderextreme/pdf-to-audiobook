@@ -5,11 +5,20 @@ name: Release
 #
 # Flow (tag push, or manual run started from a tag):
 #   create-release -> creates a DRAFT release
-#   build (x3)     -> each platform builds and uploads its installers to that draft
-#   publish        -> only if every platform succeeded, un-drafts the release
+#   build (x6)     -> each platform builds on its OWN runner and uploads its
+#                     installers to that draft:
+#                       linux       -> ubuntu-24.04     (CPU torch, default names)
+#                       win         -> windows-latest   (CPU torch, default names)
+#                       mac         -> macos-latest     (default torch, uses Metal)
+#                       linux-cuda  -> ubuntu-24.04     (NVIDIA CUDA torch, "-cuda" names)
+#                       win-cuda    -> windows-latest   (NVIDIA CUDA torch, "-cuda" names)
+#                       linux-rocm  -> ubuntu-24.04     (AMD ROCm torch, "-rocm" names)
+#   publish        -> only if every build succeeded, un-drafts the release
 #
-# Manual run from a branch: the three builds run as a smoke test; nothing is
+# Manual run from a branch: the builds run as a smoke test; nothing is
 # released and nothing is uploaded.
+#
+# ROCm is Linux-only: PyTorch does not publish ROCm wheels for Windows or macOS.
 
 on:
   push:
@@ -71,6 +80,7 @@ jobs:
     needs: create-release
     # create-release is skipped on branch runs; that is fine. A failure is not.
     if: ${{ !cancelled() && needs.create-release.result != 'failure' }}
+    # Each matrix entry runs on its own OS (see matrix.os below).
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     permissions:
@@ -78,21 +88,81 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Fields:
+        #   gpu         none | cuda | rocm. Anything but "none" gets that word
+        #               added to the installer file names (App-1.0.0-cuda.exe)
+        #               so variants never overwrite each other on the release.
+        #   torch_index pip index to install torch from ("" = default PyPI).
+        #   torch_pkgs  torch packages to install from that index.
+        #
+        # Check the index tags against https://pytorch.org/get-started/locally/
+        # now and then: CUDA tags are cu126 / cu128 / cu130, ROCm tags are
+        # rocm7.1 / rocm7.2. A newer torch can need a newer tag.
         include:
           - target: linux
             os: ubuntu-24.04
             script: package:linux
             assets: release/*.AppImage release/*.deb release/*.rpm
-         #- target: win
-         #  os: windows-latest
-         #  script: package:win
-         #  assets: release/*.exe release/*.appx release/*.appx
-         #- target: mac
-         #  os: macos-latest
-         #  script: package:mac
-         #  assets: release/*.dmg release/*.zip
+            gpu: none
+            torch_index: https://download.pytorch.org/whl/cpu
+            torch_pkgs: "torch torchaudio"
+          - target: win
+            os: windows-latest
+            script: package:win
+            # The upload step fails if a pattern matches nothing, so remove
+            # release/*.appx if your Windows build does not produce one.
+            assets: release/*.exe release/*.appx
+            gpu: none
+            torch_index: https://download.pytorch.org/whl/cpu
+            torch_pkgs: "torch torchaudio"
+          - target: mac
+            os: macos-latest
+            script: package:mac
+            assets: release/*.dmg release/*.zip
+            gpu: none
+            # macOS wheels come from the default PyPI index (Metal/MPS, no CUDA).
+            torch_index: ""
+            torch_pkgs: "torch torchaudio"
+
+          # ---- NVIDIA CUDA (Linux + Windows) ----
+          - target: linux-cuda
+            os: ubuntu-24.04
+            script: package:linux
+            assets: release/*.AppImage release/*.deb release/*.rpm
+            gpu: cuda
+            torch_index: https://download.pytorch.org/whl/cu128
+            torch_pkgs: "torch torchaudio"
+          - target: win-cuda
+            os: windows-latest
+            script: package:win
+            assets: release/*.exe release/*.appx
+            gpu: cuda
+            torch_index: https://download.pytorch.org/whl/cu128
+            torch_pkgs: "torch torchaudio"
+
+          # ---- AMD ROCm (Linux only) ----
+          # torch is capped below 2.11 because the rocm7.1 index does not carry
+          # newer builds. Move to rocm7.2 and drop the cap to use torch 2.11+.
+          - target: linux-rocm
+            os: ubuntu-24.04
+            script: package:linux
+            assets: release/*.AppImage release/*.deb release/*.rpm
+            gpu: rocm
+            torch_index: https://download.pytorch.org/whl/rocm7.1
+            torch_pkgs: "torch<2.11 torchaudio<2.11"
 
     steps:
+      # GPU torch wheels are several GB and PyInstaller/electron-builder copy
+      # them again, so free space on the Linux runner before doing anything.
+      - name: Free disk space (Linux GPU variants)
+        if: runner.os == 'Linux' && matrix.gpu != 'none'
+        shell: bash
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo docker image prune --all --force || true
+          df -h /
+
       # Replaces actions/checkout. The token is only used for the fetch and is
       # removed from the remote URL afterwards so build scripts never see it.
       - name: Checkout repository
@@ -113,12 +183,14 @@ jobs:
         run: |
           node --version
           npm --version
-          (python3 --version 2>/dev/null || python3 --version)
+          (python3 --version 2>/dev/null || python --version)
           git --version
           gh --version | sed -n 1p
 
       # Linux only: libraries for electron-builder (AppImage, rpm) and Electron.
       # Names are the Ubuntu 24.04 ones (t64 suffix on libasound2 / libfuse2).
+      # The GPU variants need nothing extra here: the CUDA and ROCm torch
+      # wheels bundle their own runtime libraries.
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -126,7 +198,6 @@ jobs:
           sudo apt-get install -y rpm libfuse2t64 libnss3 libnspr4 fontconfig dbus-x11 libasound2t64
           sudo apt install -y xkb-data fontconfig dbus-x11
           sudo apt install -y python3.12 python3.12-venv npm libnss3-tools libsmbclient0 ffmpeg fuse3 libfuse2
-
 
       # Replaces setup-ffmpeg and the system ffmpeg installs. The npm packages
       # carry statically linked binaries for the runner's own OS/arch. They are
@@ -169,23 +240,50 @@ jobs:
 
       # One bash script for all three OSes. GitHub's bash runs with -e -o
       # pipefail, so any failing command fails the step.
+      # Inside the venv we call `python` (a venv on Windows has no python3.exe).
+      # Which torch build gets installed is decided by the matrix (cpu / cuda /
+      # rocm); the last lines fail the job if the wrong build ended up in the venv.
       - name: Set up audiobook_env virtual environment
         shell: bash
+        env:
+          GPU: ${{ matrix.gpu }}
+          TORCH_INDEX: ${{ matrix.torch_index }}
+          TORCH_PKGS: ${{ matrix.torch_pkgs }}
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
             py -3.12 -m venv audiobook_env
             source audiobook_env/Scripts/activate
           else
+            # macOS runners do not guarantee python3.12 on PATH
+            if ! command -v python3.12 >/dev/null 2>&1; then
+              brew install python@3.12
+            fi
             python3.12 -m venv audiobook_env
             source audiobook_env/bin/activate
           fi
-          python3 -m pip install --upgrade pip setuptools wheel
-          python3 -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
-          python3 -m pip install .
-          python3 -m pip install pyinstaller
-          python3 -m spacy download en_core_web_sm
+          python -m pip install --upgrade pip setuptools wheel
+          read -ra torch_pkgs <<< "$TORCH_PKGS"
+          if [ -n "$TORCH_INDEX" ]; then
+            python -m pip install "${torch_pkgs[@]}" --index-url "$TORCH_INDEX"
+          else
+            python -m pip install "${torch_pkgs[@]}"
+          fi
+          python -m pip install .
+          python -m pip install pyinstaller
+          python -m spacy download en_core_web_sm
           # nltk.download() returns False instead of raising on failure
-          python3 -c "import nltk; assert nltk.download('punkt') and nltk.download('punkt_tab')"
+          python -c "import nltk; assert nltk.download('punkt') and nltk.download('punkt_tab')"
+          # Make sure `pip install .` did not swap in a different torch build.
+          python - <<'PY'
+          import os, torch
+          gpu = os.environ["GPU"]
+          hip = getattr(torch.version, "hip", None)
+          print("torch", torch.__version__, "| cuda:", torch.version.cuda, "| hip:", hip)
+          if gpu == "cuda":
+              assert torch.version.cuda, "expected a CUDA build of torch"
+          elif gpu == "rocm":
+              assert hip, "expected a ROCm build of torch"
+          PY
 
       - name: Install Node dependencies
         shell: bash
@@ -210,12 +308,35 @@ jobs:
         run: |
           npm run "$SCRIPT"
 
+      # CUDA / ROCm builds produce installers with the same names as the
+      # default build, so add the variant before upload:
+      #   App_Setup_1.0.0.exe -> App_Setup_1.0.0-cuda.exe
+      # The default (gpu: none) builds keep their original names.
+      - name: Add GPU variant to installer file names
+        if: matrix.gpu != 'none'
+        shell: bash
+        env:
+          GPU: ${{ matrix.gpu }}
+          ASSETS: ${{ matrix.assets }}
+        run: |
+          shopt -s nullglob
+          read -ra patterns <<< "$ASSETS"
+          for p in "${patterns[@]}"; do
+            for f in $p; do
+              new="${f%.*}-${GPU}.${f##*.}"
+              echo "Renaming $f -> $new"
+              mv -- "$f" "$new"
+            done
+          done
+
       - name: List build output
         shell: bash
         run: ls -lh release/
 
       # Replaces upload-artifact / download-artifact / action-gh-release.
       # Fails if any pattern matches nothing. Skipped on branch runs.
+      # GitHub rejects release assets larger than 2 GiB; a failure here on a
+      # GPU variant usually means the installer got too big (see the log above).
       - name: Upload installers to release
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
