@@ -1,5 +1,16 @@
 name: Release
 
+# Uses NO third-party actions (the repo only allows actions owned by coderextreme).
+# Everything is done with git, gh, node, npm and python that ship on the runners.
+#
+# Flow (tag push, or manual run started from a tag):
+#   create-release -> creates a DRAFT release
+#   build (x3)     -> each platform builds and uploads its installers to that draft
+#   publish        -> only if every platform succeeded, un-drafts the release
+#
+# Manual run from a branch: the three builds run as a smoke test; nothing is
+# released and nothing is uploaded.
+
 on:
   push:
     tags:
@@ -7,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       draft:
-        description: 'Create draft release'
+        description: 'Create draft release (leave it as a draft, do not publish)'
         required: false
         type: boolean
         default: false
@@ -25,151 +36,223 @@ permissions:
   contents: read
 
 jobs:
-  release:
-    name: Publish release
-    needs: build
+  # ---------------------------------------------------------------------------
+  # 1. Create (or reuse) a draft release for the tag
+  # ---------------------------------------------------------------------------
+  create-release:
+    name: Create draft release
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
-    environment: production
     permissions:
       contents: write
     steps:
-      - name: Download all build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: pdf-to-audiobook-*
-          path: artifacts
-          merge-multiple: true
+      - name: Create draft release if it does not exist
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; reusing it."
+            exit 0
+          fi
+          args=(--repo "$GITHUB_REPOSITORY" --draft --generate-notes --verify-tag)
+          if [ "$PRERELEASE" = "true" ]; then
+            args+=(--prerelease)
+          fi
+          gh release create "$TAG" "${args[@]}"
 
-      - name: Publish to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/**
-          fail_on_unmatched_files: true
-          draft: ${{ github.event.inputs.draft == 'true' }}
-          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
-          generate_release_notes: true
-
+  # ---------------------------------------------------------------------------
+  # 2. Build each platform and upload installers to the draft release
+  # ---------------------------------------------------------------------------
   build:
-    name: Build
+    name: Build (${{ matrix.target }})
+    needs: create-release
+    # create-release is skipped on branch runs; that is fine. A failure is not.
+    if: ${{ !cancelled() && needs.create-release.result != 'failure' }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: linux
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             script: package:linux
-            artifact_pattern: |
-              release/*.AppImage
-              release/*.deb
-              release/*.rpm
+            assets: release/*.AppImage release/*.deb release/*.rpm
           - target: win
             os: windows-latest
             script: package:win
-            artifact_pattern: |
-              release/*.exe
-              release/*.appx
-              release/*.msi
+            assets: release/*.exe release/*.appx release/*.msi
           - target: mac
             os: macos-latest
             script: package:mac
-            artifact_pattern: |
-              release/*.dmg
-              release/*.zip
+            assets: release/*.dmg release/*.zip
 
     steps:
+      # Replaces actions/checkout. The token is only used for the fetch and is
+      # removed from the remote URL afterwards so build scripts never see it.
       - name: Checkout repository
-        uses: actions/checkout@v4
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git init .
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth 1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
+      # Replaces setup-node / setup-python: we use what the runner image ships.
+      # Check these lines in the log against what your project expects.
+      - name: Show toolchain versions
+        shell: bash
+        run: |
+          node --version
+          npm --version
+          (python3 --version 2>/dev/null || python --version)
+          git --version
+          gh --version | sed -n 1p
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      # Install OS-specific system libraries
+      # Linux only: libraries for electron-builder (AppImage, rpm) and Electron.
+      # Names are the Ubuntu 24.04 ones (t64 suffix on libasound2 / libfuse2).
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm ffmpeg libfuse2 libnss3 libnspr4 fontconfig dbus-x11 libasound2
+          sudo apt-get install -y rpm libfuse2t64 libnss3 libnspr4 fontconfig dbus-x11 libasound2t64
 
-      - name: Install system dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install ffmpeg
-
-      - name: Install system dependencies (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          choco install ffmpeg --no-progress
-
-      - name: Set up static ffmpeg
-        uses: FedericoCarboni/setup-ffmpeg@v3
-
-      - name: Bundle ffmpeg
+      # Replaces setup-ffmpeg and the system ffmpeg installs. The npm packages
+      # carry statically linked binaries for the runner's own OS/arch. They are
+      # installed in a temp dir WITHOUT --ignore-scripts because ffmpeg-static
+      # downloads its binary in a postinstall script.
+      - name: Fetch static ffmpeg and ffprobe
         shell: bash
         run: |
-          # Ensure ffmpeg resource directory exists so electron-builder extraResources succeeds
-          mkdir -p ffmpeg/bin
-          ext=""; [ "$RUNNER_OS" = "Windows" ] && ext=".exe"
-          for t in ffplay ffmpeg ffprobe; do
-            cp "$(which $t)" "ffmpeg/bin/$t$ext"
-          done
+          FETCH_DIR="$RUNNER_TEMP/ffmpeg-fetch"
+          mkdir -p "$FETCH_DIR"
+          cd "$FETCH_DIR"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund ffmpeg-static@5 ffprobe-static@3
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const ext = process.platform === 'win32' ? '.exe' : '';
+            const dest = path.join(process.env.GITHUB_WORKSPACE, 'ffmpeg', 'bin');
+            fs.mkdirSync(dest, { recursive: true });
+            const bins = {
+              ffmpeg: require('ffmpeg-static'),
+              ffprobe: require('ffprobe-static').path,
+            };
+            for (const [name, src] of Object.entries(bins)) {
+              if (!src || !fs.existsSync(src)) {
+                console.error('Missing binary for ' + name + ': ' + src);
+                process.exit(1);
+              }
+              const target = path.join(dest, name + ext);
+              fs.copyFileSync(src, target);
+              fs.chmodSync(target, 0o755);
+              console.log('Bundled ' + name + ' -> ' + target);
+            }
+          "
+          cd "$GITHUB_WORKSPACE"
+          ls -l ffmpeg/bin
+          ./ffmpeg/bin/ffmpeg -version | sed -n 1p
+          ./ffmpeg/bin/ffprobe -version | sed -n 1p
+          file ffmpeg/bin/ffmpeg || true
 
-      # Set up Python virtual environment named audiobook_env matching package.json scripts
-      - name: Set up audiobook_env virtual environment (Linux / macOS)
-        if: runner.os != 'Windows'
+      # One bash script for all three OSes. GitHub's bash runs with -e -o
+      # pipefail, so any failing command fails the step.
+      - name: Set up audiobook_env virtual environment
+        shell: bash
         run: |
-          python -m venv audiobook_env
-          source audiobook_env/bin/activate
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            python -m venv audiobook_env
+            source audiobook_env/Scripts/activate
+          else
+            python3 -m venv audiobook_env
+            source audiobook_env/bin/activate
+          fi
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
           python -m pip install .
           python -m pip install pyinstaller
           python -m spacy download en_core_web_sm
-          python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
+          # nltk.download() returns False instead of raising on failure
+          python -c "import nltk; assert nltk.download('punkt') and nltk.download('punkt_tab')"
 
-      - name: Set up audiobook_env virtual environment (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          python -m venv audiobook_env
-          .\audiobook_env\Scripts\Activate.ps1
-          python -m pip install --upgrade pip setuptools wheel
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python -m pip install .
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python -m pip install pyinstaller
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python -m spacy download en_core_web_sm
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-
-      # Install Node dependencies
       - name: Install Node dependencies
+        shell: bash
         run: |
           npm ci --ignore-scripts
           node node_modules/electron/install.js
 
-      # Build PyInstaller executable and package Electron application
+      # No GH_TOKEN here on purpose: electron-builder auto-publishes when it
+      # sees one, and build scripts should not hold a write token.
       - name: Build & Package App
+        shell: bash
+        env:
+          SCRIPT: ${{ matrix.script }}
+          # Code signing (electron-builder reads these). Add the secrets, then
+          # uncomment what you need.
+          # CSC_LINK: ${{ secrets.CSC_LINK }}
+          # CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # macOS notarization:
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          npm run ${{ matrix.script }}
+          npm run "$SCRIPT"
 
-      # Upload artifacts to GitHub Actions run artifacts
-      - name: Upload workflow build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: pdf-to-audiobook-${{ matrix.target }}
-          path: ${{ matrix.artifact_pattern }}
-          if-no-files-found: error
+      - name: List build output
+        shell: bash
+        run: ls -lh release/
+
+      # Replaces upload-artifact / download-artifact / action-gh-release.
+      # Fails if any pattern matches nothing. Skipped on branch runs.
+      - name: Upload installers to release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          ASSETS: ${{ matrix.assets }}
+        run: |
+          shopt -s nullglob
+          read -ra patterns <<< "$ASSETS"
+          files=()
+          for p in "${patterns[@]}"; do
+            matches=( $p )
+            if [ "${#matches[@]}" -eq 0 ]; then
+              echo "::error::No files match $p"
+              exit 1
+            fi
+            files+=( "${matches[@]}" )
+          done
+          printf 'Uploading: %s\n' "${files[@]}"
+          gh release upload "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+
+  # ---------------------------------------------------------------------------
+  # 3. Publish the release, only if every platform uploaded successfully
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/') && inputs.draft != true
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: write
+    steps:
+      - name: Publish draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          echo "Assets on release $TAG:"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name'
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
