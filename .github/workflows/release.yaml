@@ -203,14 +203,14 @@ jobs:
       # carry statically linked binaries for the runner's own OS/arch. They are
       # installed in a temp dir WITHOUT --ignore-scripts because ffmpeg-static
       # downloads its binary in a postinstall script.
-      - name: Fetch static ffmpeg and ffprobe
+      - name: Fetch static ffmpeg, ffprobe and ffplay
         shell: bash
         run: |
           FETCH_DIR="$RUNNER_TEMP/ffmpeg-fetch"
           mkdir -p "$FETCH_DIR"
           cd "$FETCH_DIR"
           npm init -y >/dev/null
-          npm install --no-audit --no-fund ffmpeg-static@5 ffprobe-static@3
+          npm install --no-audit --no-fund ffmpeg-static@5 ffprobe-static@3 ffplay-static@3
           node -e "
             const fs = require('fs');
             const path = require('path');
@@ -220,6 +220,7 @@ jobs:
             const bins = {
               ffmpeg: require('ffmpeg-static'),
               ffprobe: require('ffprobe-static').path,
+              ffplay: require('ffprobe-static'),
             };
             for (const [name, src] of Object.entries(bins)) {
               if (!src || !fs.existsSync(src)) {
@@ -236,7 +237,9 @@ jobs:
           ls -l ffmpeg/bin
           ./ffmpeg/bin/ffmpeg -version | sed -n 1p
           ./ffmpeg/bin/ffprobe -version | sed -n 1p
+          ./ffmpeg/bin/ffplay -version | sed -n 1p
           file ffmpeg/bin/ffmpeg || true
+          file ffmpeg/bin/ffplay || true
 
       # One bash script for all three OSes. GitHub's bash runs with -e -o
       # pipefail, so any failing command fails the step.

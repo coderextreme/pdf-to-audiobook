@@ -328,6 +328,7 @@ function spawnConversion(
     env: {
       ...process.env,               // Keep all existing environment variables
       PYTHONIOENCODING: 'utf-8',    // Force Python to output in UTF-8 so emojis don't crash it!
+      PYTHONUTF8: "1",
       NLTK_DISABLE_IMPORT_SECURITY: '1',
     }
   })

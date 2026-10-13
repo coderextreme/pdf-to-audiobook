@@ -18,6 +18,14 @@ from html import unescape
 from pypdf import PdfReader
 import torch
 
+# change to a standarduzed utf-8 encoding instead of something from Microsoft
+for _name in ("stdout", "stderr"):
+    _s = getattr(sys, _name)
+    if _s is None:
+        setattr(sys, _name, open(os.devnull, "w", encoding="utf-8"))
+    elif hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8", errors="replace")
+
 # Input formats this converter can read. Output is chosen by the output suffix (.wav or .mp3).
 SUPPORTED_INPUT_EXTENSIONS = {".pdf", ".epub", ".txt", ".text", ".md"}
 SUPPORTED_OUTPUT_EXTENSIONS = {".wav", ".mp3"}
