@@ -86,7 +86,7 @@ jobs:
           - target: win
             os: windows-latest
             script: package:win
-            assets: release/*.exe release/*.appx release/*.msi
+            assets: release/*.exe release/*.appx release/*.appx
           - target: mac
             os: macos-latest
             script: package:mac
