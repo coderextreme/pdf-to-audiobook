@@ -126,8 +126,6 @@ jobs:
           node node_modules/electron/install.js
 
       # Build PyInstaller executable and package Electron application
-      - name: Build & Package App
-        env:
           NLTK_DISABLE_IMPORT_SECURITY: '1'
         run: |
           npm run ${{ matrix.script }}
@@ -150,4 +148,5 @@ jobs:
           prerelease: ${{ github.event.inputs.prerelease == 'true' }}
           generate_release_notes: true
         env:
+          name: production
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
