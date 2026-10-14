@@ -1,7 +1,7 @@
 {
   "name": "pdf-to-audiobook",
   "desktopName": "com.ikicker.pdf-to-audiobook",
-  "version": "3.0.24",
+  "version": "3.0.30",
   "description": "Convert PDF documents to high-quality audiobooks using Kokoro TTS",
   "main": "out/main/index.js",
   "author": "Inner Ninja",
@@ -14,6 +14,7 @@
     "preview": "electron-vite preview",
     "package": "electron-vite build && electron-builder --publish never",
     "package:win": "electron-vite build && electron-builder --win --publish never",
+    "package:win:store": "electron-vite build && electron-builder --win appx --publish never",
     "package:mac": "electron-vite build && electron-builder --mac --publish never",
     "package:linux": "electron-vite build && electron-builder --linux --publish never"
   },
