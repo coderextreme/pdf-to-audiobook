@@ -65,9 +65,7 @@
     },
     "linux": {
       "target": [
-        "AppImage",
-        "deb",
-        "rpm"
+        "AppImage"
       ],
       "icon": "frm_Main/favicon.png",
       "category": "Utility",
