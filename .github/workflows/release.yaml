@@ -102,7 +102,7 @@ jobs:
           - target: linux
             os: ubuntu-24.04
             script: package:linux
-            assets: release/*.AppImage release/*.deb release/*.rpm
+            assets: release/*.AppImage
             gpu: none
             torch_index: https://download.pytorch.org/whl/cpu
             torch_pkgs: "torch torchaudio"
@@ -128,7 +128,7 @@ jobs:
           - target: linux-cuda
             os: ubuntu-24.04
             script: package:linux
-            assets: release/*.AppImage release/*.deb release/*.rpm
+            assets: release/*.AppImage
             gpu: cuda
             torch_index: https://download.pytorch.org/whl/cu128
             torch_pkgs: "torch torchaudio"
@@ -146,7 +146,7 @@ jobs:
           - target: linux-rocm
             os: ubuntu-24.04
             script: package:linux
-            assets: release/*.AppImage release/*.deb release/*.rpm
+            assets: release/*.AppImage
             gpu: rocm
             torch_index: https://download.pytorch.org/whl/rocm7.1
             torch_pkgs: "torch<2.11 torchaudio<2.11"
