@@ -227,12 +227,12 @@ app.whenReady().then(() => {
     const cfg = loadConfig()
     if (cfg.ffplay) {
       try {
-        spawn(cfg.ffplay, ['-autoexit', '-i', filePath], { detached: true })
+        await shell.openPath(filePath);
       } catch {
-        await shell.openPath(filePath)
+        spawn(cfg.ffplay, ['-autoexit', '-i', filePath], { detached: true });
       }
     } else {
-      await shell.openPath(filePath)
+      await shell.openPath(filePath);
     }
   })
 
@@ -328,6 +328,7 @@ function spawnConversion(
     env: {
       ...process.env,               // Keep all existing environment variables
       PYTHONIOENCODING: 'utf-8',    // Force Python to output in UTF-8 so emojis don't crash it!
+      PYTHONUTF8: "1",
       NLTK_DISABLE_IMPORT_SECURITY: '1',
     }
   })

@@ -1,0 +1,5 @@
+extends: package.json
+win:
+  target: [nsis]
+nsis:
+  differentialPackage: false

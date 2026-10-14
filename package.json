@@ -14,7 +14,7 @@
     "preview": "electron-vite preview",
     "package": "electron-vite build && electron-builder --publish never",
     "package:win": "electron-vite build && electron-builder --win --publish never",
-    "package:win:store": "electron-vite build && electron-builder --win appx --publish never",
+    "package:win:cuda": "electron-vite build && electron-builder --win --config electron-builder.cuda.yml --publish never",
     "package:mac": "electron-vite build && electron-builder --mac --publish never",
     "package:linux": "electron-vite build && electron-builder --linux --publish never"
   },
@@ -26,9 +26,9 @@
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "5.2.0",
-    "electron": "41.10.7",
     "electron-builder": "26.15.3",
     "electron-vite": "5.0.0",
+    "electron": "41.10.7",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "typescript": "6.0.2",
@@ -50,15 +50,25 @@
       "ffmpeg/**/*"
     ],
     "win": {
-      "target": ["nsis", "appx"],
+      "target": [
+        "nsis",
+        "appx"
+      ],
       "icon": "frm_Main/favicon.ico"
     },
     "mac": {
-       "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "resources/icon.icns"
     },
     "linux": {
-      "target": [ "AppImage", "deb", "rpm" ],
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
       "icon": "frm_Main/favicon.png",
       "category": "Utility",
       "maintainer": "Inner Ninja <your-email@example.com>"

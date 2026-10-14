@@ -134,8 +134,8 @@ jobs:
             torch_pkgs: "torch torchaudio"
           - target: win-cuda
             os: windows-latest
-            script: package:win
-            assets: release/*.exe release/*.appx
+            script: package:win:cuda
+            assets: release/*.exe
             gpu: cuda
             torch_index: https://download.pytorch.org/whl/cu128
             torch_pkgs: "torch torchaudio"
@@ -203,7 +203,7 @@ jobs:
       # carry statically linked binaries for the runner's own OS/arch. They are
       # installed in a temp dir WITHOUT --ignore-scripts because ffmpeg-static
       # downloads its binary in a postinstall script.
-      - name: Fetch static ffmpeg and ffprobe
+      - name: Fetch static ffmpeg, ffprobe
         shell: bash
         run: |
           FETCH_DIR="$RUNNER_TEMP/ffmpeg-fetch"

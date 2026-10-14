@@ -69,7 +69,7 @@ pause_between_chunks_sec = 0.6
 [tool.pdf-to-audiobook.external_tools]
 ffmpeg  = "ffmpeg/bin/ffmpeg"
 ffprobe = "ffmpeg/bin/ffprobe"
-ffplay = "ffmpeg/bin/ffplay"
+ffplay = "ffplay"
 
 [dropdowns]
 voices = [
