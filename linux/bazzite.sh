@@ -51,16 +51,17 @@ $PYTHON -m spacy download en_core_web_sm || echo "Couldn't find spacy"
 
 $PIP install .
 $PIP install pyinstaller
-$PIP uninstall torch torchvision torchaudio -y
+$PYTHON -m spacy download en_core_web_sm
+$PIP uninstall torch torchaudio -y
 # $PIP install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
-$PIP install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+$PIP install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 
 export NLTK_DISABLE_IMPORT_SECURITY=1
 $PYTHON -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
 $PIP install pip-audit
 echo Doing Python security audit...
 pip-audit || echo "========  Audit failed!  Check results"
-
+pyinstaller --log-level WARN --collect-all spacy --collect-all en_core_web_sm --copy-metadata en_core_web_sm --copy-metadata spacy --collect-all thinc --collect-all srsly --collect-all spacy_legacy --collect-all spacy_loggers --collect-all cymem --collect-all preshed --collect-all murmurhash --collect-all blis --collect-all catalogue --collect-all wasabi --collect-all weasel --collect-all confection --collect-all espeakng_loader --collect-all kokoro --collect-all misaki --collect-all transformers --collect-all language_tags --collect-data espeakng_loader --copy-metadata torch --copy-metadata tqdm --copy-metadata regex --copy-metadata requests --copy-metadata packaging --copy-metadata filelock --copy-metadata numpy --copy-metadata tokenizers --onedir PDF_to_Audiobook.py
 echo Running graphical user interface
 npm run dev
 
